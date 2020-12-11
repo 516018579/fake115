@@ -1,403 +1,241 @@
 // ==UserScript==
 // @name         fake 115Browser
 // @namespace    http://github.com/kkHAIKE/fake115
-// @version      1.3.8
+// @version      1.3.9
 // @description  伪装115浏览器
 // @author       kkhaike
 // @match        *://115.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
 // @grant        GM_log
-// @connect      passport.115.com
-// @connect      passportapi.115.com
 // @connect      proapi.115.com
-// @connect      uplb.115.com
-// @require      https://cdn.bootcss.com/crc-32/1.2.0/crc32.min.js
-// @require      https://cdn.bootcss.com/blueimp-md5/2.10.0/js/md5.min.js
-// @require      https://cdn.bootcss.com/aes-js/3.1.0/index.min.js
-// @require      https://raw.github.com/kkHAIKE/node-lz4/balabala/build/lz4.min.js
-// @require      https://raw.github.com/indutny/elliptic/master/dist/elliptic.min.js
-// @require      https://raw.github.com/emn178/js-md4/master/build/md4.min.js
-// @require      https://raw.github.com/kkHAIKE/fake115/master/fec115.min.js
-// @require      https://cdn.bootcss.com/jsSHA/2.3.1/sha1.js
-// @require      https://raw.github.com/pierrec/js-xxhash/master/build/xxhash.min.js
-// @require      https://raw.github.com/omichelsen/compare-versions/master/index.js
+// @require      https://rawgit.com/kkHAIKE/jsencrypt/balabala/bin/jsencrypt.js
+// @require      https://cdn.bootcdn.net/ajax/libs/blueimp-md5/2.18.0/js/md5.min.js
 // @run-at       document-start
 // ==/UserScript==
 (function() {
     'use strict';
-var Buffer, LZ4, LoginEncrypt_, browserInterface, bytesToHex, bytesToString, cloneInto, dictToForm, dictToQuery, ec115_compress_decode, ec115_decode, ec115_decode_aes, ec115_encode_data, ec115_encode_token, ec115_init, elliptic, g_ver, get_key, md4, md4_init, preLoginEncrypt, ref, sig_calc, sig_init, stringToBytes;
+var CreateDownloadTask, CreateDownloadTask_, browserInterface, bytesToString, cloneInto, g_key_l, g_key_s, g_kts, m115_asym_decode, m115_asym_encode, m115_decode, m115_encode, m115_getkey, m115_sym_decode, m115_sym_encode, prsa, ref, srsa, stringToBytes, xor115_enc;
 
-g_ver = '8.3.0.25';
+g_kts = [0xF0, 0xE5, 0x69, 0xAE, 0xBF, 0xDC, 0xBF, 0x5A, 0x1A, 0x45, 0xE8, 0xBE, 0x7D, 0xA6, 0x73, 0x88, 0xDE, 0x8F, 0xE7, 0xC4, 0x45, 0xDA, 0x86, 0x94, 0x9B, 0x69, 0x92, 0x0B, 0x6A, 0xB8, 0xF1, 0x7A, 0x38, 0x06, 0x3C, 0x95, 0x26, 0x6D, 0x2C, 0x56, 0x00, 0x70, 0x56, 0x9C, 0x36, 0x38, 0x62, 0x76, 0x2F, 0x9B, 0x5F, 0x0F, 0xF2, 0xFE, 0xFD, 0x2D, 0x70, 0x9C, 0x86, 0x44, 0x8F, 0x3D, 0x14, 0x27, 0x71, 0x93, 0x8A, 0xE4, 0x0E, 0xC1, 0x48, 0xAE, 0xDC, 0x34, 0x7F, 0xCF, 0xFE, 0xB2, 0x7F, 0xF6, 0x55, 0x9A, 0x46, 0xC8, 0xEB, 0x37, 0x77, 0xA4, 0xE0, 0x6B, 0x72, 0x93, 0x7E, 0x51, 0xCB, 0xF1, 0x37, 0xEF, 0xAD, 0x2A, 0xDE, 0xEE, 0xF9, 0xC9, 0x39, 0x6B, 0x32, 0xA1, 0xBA, 0x35, 0xB1, 0xB8, 0xBE, 0xDA, 0x78, 0x73, 0xF8, 0x20, 0xD5, 0x27, 0x04, 0x5A, 0x6F, 0xFD, 0x5E, 0x72, 0x39, 0xCF, 0x3B, 0x9C, 0x2B, 0x57, 0x5C, 0xF9, 0x7C, 0x4B, 0x7B, 0xD2, 0x12, 0x66, 0xCC, 0x77, 0x09, 0xA6];
 
-Buffer = require('buffer').Buffer;
+g_key_s = [0x29, 0x23, 0x21, 0x5E];
 
-LZ4 = require('lz4');
+g_key_l = [0x42, 0xDA, 0x13, 0xBA, 0x78, 0x76, 0x8D, 0x37, 0xE8, 0xEE, 0x04, 0x91];
 
-elliptic = window.elliptic;
+m115_getkey = function(length, key) {
+  var i;
+  if (key != null) {
+    return (function() {
+      var j, ref, results;
+      results = [];
+      for (i = j = 0, ref = length; (0 <= ref ? j < ref : j > ref); i = 0 <= ref ? ++j : --j) {
+        results.push(((key[i] + g_kts[length * i]) & 0xff) ^ g_kts[length * (length - 1 - i)]);
+      }
+      return results;
+    })();
+  }
+  if (length === 12) {
+    return g_key_l.slice(0);
+  }
+  return g_key_s.slice(0);
+};
 
-md4 = window.md4;
+xor115_enc = function(src, srclen, key, keylen) {
+  var i, j, k, mod4, ref, ref1, ref2, ret;
+  mod4 = srclen % 4;
+  ret = [];
+  if (mod4 !== 0) {
+    for (i = j = 0, ref = mod4; (0 <= ref ? j < ref : j > ref); i = 0 <= ref ? ++j : --j) {
+      ret.push(src[i] ^ key[i % keylen]);
+    }
+  }
+  for (i = k = ref1 = mod4, ref2 = srclen; (ref1 <= ref2 ? k < ref2 : k > ref2); i = ref1 <= ref2 ? ++k : --k) {
+    ret.push(src[i] ^ key[(i - mod4) % keylen]);
+  }
+  return ret;
+};
+
+m115_sym_encode = function(src, srclen, key1, key2) {
+  var k1, k2, ret;
+  k1 = m115_getkey(4, key1);
+  k2 = m115_getkey(12, key2);
+  ret = xor115_enc(src, srclen, k1, 4);
+  ret.reverse();
+  ret = xor115_enc(ret, srclen, k2, 12);
+  return ret;
+};
+
+m115_sym_decode = function(src, srclen, key1, key2) {
+  var k1, k2, ret;
+  k1 = m115_getkey(4, key1);
+  k2 = m115_getkey(12, key2);
+  ret = xor115_enc(src, srclen, k2, 12);
+  ret.reverse();
+  ret = xor115_enc(ret, srclen, k1, 4);
+  return ret;
+};
 
 stringToBytes = function(s) {
-  var i, l, ref, ret;
+  var i, j, ref, ret;
   ret = [];
-  for (i = l = 0, ref = s.length; (0 <= ref ? l < ref : l > ref); i = 0 <= ref ? ++l : --l) {
+  for (i = j = 0, ref = s.length; (0 <= ref ? j < ref : j > ref); i = 0 <= ref ? ++j : --j) {
     ret.push(s.charCodeAt(i));
   }
   return ret;
 };
 
 bytesToString = function(b) {
-  var i, l, len1, ret;
+  var i, j, len, ret;
   ret = '';
-  for (l = 0, len1 = b.length; l < len1; l++) {
-    i = b[l];
+  for (j = 0, len = b.length; j < len; j++) {
+    i = b[j];
     ret += String.fromCharCode(i);
   }
   return ret;
 };
 
-bytesToHex = function(b) {
-  var l, len1, ret, t;
+prsa = new JSEncrypt();
+
+prsa.setPublicKey(`-----BEGIN RSA PUBLIC KEY-----
+MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDR3rWmeYnRClwLBB0Rq0dlm8Mr
+PmWpL5I23SzCFAoNpJX6Dn74dfb6y02YH15eO6XmeBHdc7ekEFJUIi+swganTokR
+IVRRr/z16/3oh7ya22dcAqg191y+d6YDr4IGg/Q5587UKJMj35yQVXaeFXmLlFPo
+kFiz4uPxhrB7BGqZbQIDAQAB
+-----END RSA PUBLIC KEY-----`);
+
+srsa = new JSEncrypt();
+
+srsa.setPrivateKey(`-----BEGIN RSA PRIVATE KEY-----
+MIICXAIBAAKBgQCMgUJLwWb0kYdW6feyLvqgNHmwgeYYlocst8UckQ1+waTOKHFC
+TVyRSb1eCKJZWaGa08mB5lEu/asruNo/HjFcKUvRF6n7nYzo5jO0li4IfGKdxso6
+FJIUtAke8rA2PLOubH7nAjd/BV7TzZP2w0IlanZVS76n8gNDe75l8tonQQIDAQAB
+AoGANwTasA2Awl5GT/t4WhbZX2iNClgjgRdYwWMI1aHbVfqADZZ6m0rt55qng63/
+3NsjVByAuNQ2kB8XKxzMoZCyJNvnd78YuW3Zowqs6HgDUHk6T5CmRad0fvaVYi6t
+viOkxtiPIuh4QrQ7NUhsLRtbH6d9s1KLCRDKhO23pGr9vtECQQDpjKYssF+kq9iy
+A9WvXRjbY9+ca27YfarD9WVzWS2rFg8MsCbvCo9ebXcmju44QhCghQFIVXuebQ7Q
+pydvqF0lAkEAmgLnib1XonYOxjVJM2jqy5zEGe6vzg8aSwKCYec14iiJKmEYcP4z
+DSRms43hnQsp8M2ynjnsYCjyiegg+AZ87QJANuwwmAnSNDOFfjeQpPDLy6wtBeft
+5VOIORUYiovKRZWmbGFwhn6BQL+VaafrNaezqUweBRi1PYiAF2l3yLZbUQJAf/nN
+4Hz/pzYmzLlWnGugP5WCtnHKkJWoKZBqO2RfOBCq+hY4sxvn3BHVbXqGcXLnZPvo
+YuaK7tTXxZSoYLEzeQJBAL8Mt3AkF1Gci5HOug6jT4s4Z+qDDrUXo9BlTwSWP90v
+wlHF+mkTJpKd5Wacef0vV+xumqNorvLpIXWKwxNaoHM=
+-----END RSA PRIVATE KEY-----`);
+
+m115_asym_encode = function(src, srclen) {
+  var i, j, m, ref, ret;
+  m = 128 - 11;
   ret = '';
-  for (l = 0, len1 = b.length; l < len1; l++) {
-    t = b[l];
-    ret += (t >> 4).toString(16);
-    ret += (t & 0xf).toString(16);
+  for (i = j = 0, ref = Math.floor((srclen + m - 1) / m); (0 <= ref ? j < ref : j > ref); i = 0 <= ref ? ++j : --j) {
+    ret += window.atob(prsa.encrypt(bytesToString(src.slice(i * m, Math.min((i + 1) * m, srclen)))));
   }
-  return ret;
+  return window.btoa(ret);
 };
 
-ec115_init = function() {
-  var Q, c, key, keys, pub;
-  c = new elliptic.ec('p224');
-  keys = c.genKeyPair();
-  pub = [0x1d].concat(keys.getPublic(true, true));
-  Q = c.keyFromPublic('0457A29257CD2320E5D6D143322FA4BB8A3CF9D3CC623EF5EDAC62B7678A89C91A83BA800D6129F522D034C895DD2465243ADDC250953BEEBA'.toLowerCase(), 'hex');
-  key = (keys.derive(Q.getPublic())).toArray();
-  return {pub, key};
+m115_asym_decode = function(src, srclen) {
+  var i, j, m, ref, ret;
+  m = 128;
+  ret = '';
+  for (i = j = 0, ref = Math.floor((srclen + m - 1) / m); (0 <= ref ? j < ref : j > ref); i = 0 <= ref ? ++j : --j) {
+    ret += srsa.decrypt(window.btoa(bytesToString(src.slice(i * m, Math.min((i + 1) * m, srclen)))));
+  }
+  return stringToBytes(ret);
 };
 
-ec115_encode_token = function(pub, tm, cnt) {
-  var i, l, m, o, q, r20, r21, tmp, tmp2;
-  r20 = Math.floor(Math.random() * 256);
-  r21 = Math.floor(Math.random() * 256);
-  tmp = Buffer.alloc(48);
-  for (i = l = 0; l < 15; i = ++l) {
-    tmp[i] = pub[i] ^ r20;
-  }
-  tmp[15] = r20;
-  tmp.writeInt32LE(115, 16);
-  tmp.writeInt32LE(tm, 20);
-  for (i = m = 16; m < 24; i = ++m) {
-    tmp[i] ^= r20;
-  }
-  for (i = o = 24; o < 39; i = ++o) {
-    tmp[i] = pub[i - 9] ^ r21;
-  }
-  tmp[39] = r21;
-  tmp.writeInt32LE(cnt, 40);
-  for (i = q = 40; q < 44; i = ++q) {
-    tmp[i] ^= r21;
-  }
-  tmp2 = Buffer.concat([Buffer.from('^j>WD3Kr?J2gLFjD4W2y@'), tmp.slice(0, 44)]);
-  tmp.writeInt32LE(CRC32.buf(tmp2), 44);
-  return tmp.toString('base64');
+m115_encode = function(src, tm) {
+  var key, tmp;
+  key = stringToBytes(md5(`!@###@#${tm}DFDR@#@#`));
+  tmp = stringToBytes(src);
+  tmp = m115_sym_encode(tmp, tmp.length, key, null);
+  tmp = key.slice(0, 16).concat(tmp);
+  return {
+    data: m115_asym_encode(tmp, tmp.length),
+    key
+  };
 };
 
-ec115_encode_data = function(data, key) {
-  var aesEcb, i, j, k, key1, key2, l, n, part, rets, tmp;
-  key1 = key.slice(0, 16);
-  key2 = key.slice(-16);
-  aesEcb = new aesjs.ModeOfOperation.ecb(key1);
-  tmp = stringToBytes(data);
-  n = tmp.length;
-  j = 0;
-  rets = [];
-  while (n > 0) {
-    part = Buffer.alloc(16);
-    for (i = l = 0; l < 16; i = ++l) {
-      k = n <= 0 ? 0 : tmp[i + j];
-      part[i] = key2[i] ^ k;
-      --n;
-    }
-    key2 = aesEcb.encrypt(part);
-    rets.push(Buffer.from(key2));
-    j += 16;
-  }
-  return Buffer.concat(rets);
+m115_decode = function(src, key) {
+  var tmp;
+  tmp = stringToBytes(window.atob(src));
+  tmp = m115_asym_decode(tmp, tmp.length);
+  return bytesToString(m115_sym_decode(tmp.slice(16), tmp.length - 16, key, tmp.slice(0, 16)));
 };
 
-ec115_decode_aes = function(data, key) {
-  var aesCbc, i, iv, key1, ret;
-  key1 = key.slice(0, 16);
-  iv = key.slice(-16);
-  aesCbc = new aesjs.ModeOfOperation.cbc(key1, iv);
-  ret = aesCbc.decrypt(data);
-  i = ret.length;
-  while (i > 0 && ret[i - 1] === 0) {
-    --i;
-  }
-  return Buffer.from(ret.buffer, ret.byteOffset, i);
-};
-
-ec115_compress_decode = function(data) {
-  var len, p, r, rets, tmp;
-  p = 0;
-  rets = [];
-  while (p < data.length) {
-    len = data.readInt16LE(p) + 2;
-    if (p + len > data.length) {
-      return null;
-    }
-    tmp = Buffer.alloc(0x2000);
-    r = LZ4.decodeBlock(data.slice(p + 2, p + len), tmp);
-    if (r < 0) {
-      return null;
-    }
-    rets.push(tmp.slice(0, r));
-    p += len;
-  }
-  return Buffer.concat(rets);
-};
-
-get_key = function(data_buf) {
-  var i, l, p, ret, t;
-  p = 0;
-  ret = Buffer.alloc(40);
-  for (i = l = 0; l < 40; i = ++l) {
-    t = data_buf.readInt32LE(p);
-    p = t + 1;
-    ret[i] = data_buf[t];
-  }
-  return ret;
-};
-
-md4_init = function(pSig) {
-  var ret;
-  ret = md4.create();
-  ret.h0 = pSig.readInt32LE(4);
-  ret.h1 = pSig.readInt32LE(8);
-  ret.h2 = pSig.readInt32LE(12);
-  ret.h3 = pSig.readInt32LE(16);
-  ret.first = false;
-  return ret;
-};
-
-sig_init = function(body) {
-  var data_buf, data_buf_p, dhash, md4h, ori_data_p, pSig, sz;
-  ori_data_p = Module._malloc(body.length);
-  Module.HEAPU8.set(body, ori_data_p);
-  data_buf_p = Module._malloc(body.length);
-  sz = Module.ccall('calc_out', 'number', ['number', 'number', 'number'], [ori_data_p, body.length, data_buf_p]);
-  Module._free(ori_data_p);
-  data_buf = Buffer.from(Module.buffer, data_buf_p, sz);
-  pSig = get_key(data_buf);
-  md4h = md4_init(pSig);
-  md4h.update(data_buf);
-  dhash = md4h.digest();
-  return {data_buf, data_buf_p, pSig, dhash};
-};
-
-sig_calc = function({data_buf, data_buf_p, pSig, dhash}, src) {
-  var h1, h1_p, h2, h2b, i, l, md4h, out_data, out_data_p, pad, ret, sz, xxh;
-  xxh = XXH.h64();
-  xxh.init(pSig.readUInt32LE(8));
-  xxh.update(src);
-  h2 = xxh.digest().toString(16);
-  pad = '0000000000000000';
-  h2b = Buffer.from(pad.slice(0, 16 - h2.length) + h2, 'hex').swap64();
-  md4h = md4_init(pSig);
-  md4h.update(dhash);
-  md4h.update(src);
-  md4h.update(h2b);
-  md4h.update(pSig);
-  h1 = new Uint8Array(md4h.buffer());
-  h1_p = Module._malloc(16);
-  Module.HEAPU8.set(h1, h1_p);
-  out_data_p = Module._malloc(0x10000);
-  sz = Module.ccall('encode', 'number', ['number', 'number', 'number', 'number', 'number', 'number', 'number'], [data_buf_p, data_buf.length / 2, h1_p, 16, out_data_p, 8, 10]);
-  Module._free(data_buf_p);
-  Module._free(h1_p);
-  out_data = new Uint8Array(Module.buffer, out_data_p, sz);
-  md4h = md4_init(pSig);
-  md4h.update(out_data);
-  ret = md4h.digest();
-  Module._free(out_data_p);
-  ret.push(pSig[0]);
-  for (i = l = 36; l < 40; i = ++l) {
-    ret.push(pSig[i]);
-  }
-  return bytesToHex(ret);
-};
-
-ec115_decode = function(data, key) {
-  var dec, unzip;
-  dec = data[data.length - 12 + 5];
-  unzip = data[data.length - 12 + 4];
-  data = data.slice(0, -12);
-  if (dec === 1) {
-    data = ec115_decode_aes(data, key);
-  }
-  if ((data != null) && unzip === 1) {
-    data = ec115_compress_decode(data);
-  }
-  return data;
-};
-
-dictToQuery = function(dict) {
-  var k, tmp, v;
-  tmp = [];
-  for (k in dict) {
-    v = dict[k];
-    tmp.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
-  }
-  return tmp.join('&');
-};
-
-dictToForm = function(dict) {
-  var k, tmp, v;
-  tmp = [];
-  for (k in dict) {
-    v = dict[k];
-    tmp.push(`${k}=${v}`);
-  }
-  return tmp.join('&');
-};
-
-LoginEncrypt_ = function({account, passwd, environment, goto, login_type}, g, {pub, key}, sig) {
-  var data, fake, tm, tmus, token;
+CreateDownloadTask_ = function(f, cb) {
+  var data, key, tm, tmus;
   tmus = (new Date()).getTime();
   tm = Math.floor(tmus / 1000);
-  fake = md5(account);
-  token = ec115_encode_token(pub, tm, 1);
-  data = ec115_encode_data(dictToForm({
-    GUID: fake.slice(0, 20),
-    account: account,
-    device: 'GhostXP', // hostname
-    device_id: fake.slice(2, 14).toUpperCase(), // mac
-    device_type: 'windows',
-    disk_serial: fake.slice(0, 8).toUpperCase(), // harddisk serial
-    dk: '',
-    environment: environment,
-    goto: goto,
-    login_source: '115chrome',
-    network: '5',
-    passwd: passwd,
-    sign: md5(`${account}${tm}`),
-    system_info: `            ${fake[1]}${fake[0]}${fake[3]}${fake[2]}${fake[5]}${fake[4]}${fake[7]}${fake[6]}`.toUpperCase(),
-    // sha1(user sid (unicode)) + c volume serial + checksum
-    time: tm,
-    login_type: login_type,
-    signew: 1,
-    sign115: sig_calc(sig, md5(`${account}${tm}`))
-  }), key);
+  ({data, key} = m115_encode(JSON.stringify({
+    pickcode: f.pc
+  }), tm));
   return GM_xmlhttpRequest({
     method: 'POST',
-    url: `http://passport.115.com/?ct=encrypt&ac=login&k_ec=${token}`,
-    data: GM_info.scriptHandler === 'Violentmonkey' && compareVersions.compare(GM_info.version, 'v2.12.2', '<') ? new Blob([data.buffer], {
-      type: 'application/octet-binary'
-    }) : data.toString('latin1'),
-    binary: true,
-    responseType: 'arraybuffer',
-    //overrideMimeType: 'text\/plain; charset=x-user-defined'
+    url: `http://proapi.115.com/app/chrome/downurl?t=${tm}`,
+    data: `data=${encodeURIComponent(data)}`,
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
-    },
-    //anonymous: true
-    onerror: function(response) {
-      return GM_log(`response.status = ${response.status}, response.statusText = ${response.statusText}`);
+      'Content-Type': 'application/x-www-form-urlencoded'
     },
     onload: function(response) {
-      var date, datestr, json;
-      if (response.status === 200) {
-        data = Buffer.from(response.response);
-        data = ec115_decode(data, key);
-        if (data != null) {
-          json = JSON.parse(data.toString('latin1'));
-          if (json.state && (json.data != null)) {
-            date = new Date();
-            date.setTime(date.getTime() + 7 * 24 * 3600 * 1000);
-            datestr = date.toGMTString();
-            document.cookie = `UID=${json.data.cookie.UID}; expires=${datestr}; path=/; domain=115.com`;
-            document.cookie = `CID=${json.data.cookie.CID}; expires=${datestr}; path=/; domain=115.com`;
-            document.cookie = `SEID=${json.data.cookie.SEID}; expires=${datestr}; path=/; domain=115.com`;
-            document.cookie = `OOFL=${json.data.user_id}; expires=${datestr}; path=/; domain=115.com`;
-            //json.goto = "#{json.goto}#{encodeURIComponent(goto)}"
-            delete json.data;
-          }
-          return unsafeWindow[g](JSON.stringify(json));
-        } else {
-          return GM_log('data is null');
-        }
+      var json;
+      json = JSON.parse(response.responseText);
+      if (!json.state) {
+        return alert(json.msg);
       } else {
-        return GM_log(`response.status = ${response.status}`);
+        return cb(JSON.parse(m115_decode(json.data, key)));
       }
     }
   });
 };
 
-preLoginEncrypt = function(n, g) {
-  var key, pub, tm, tmus, token;
-  tmus = (new Date()).getTime();
-  tm = Math.floor(tmus / 1000);
-  ({pub, key} = ec115_init());
-  token = ec115_encode_token(pub, tm, 0);
-  return GM_xmlhttpRequest({
-    method: 'GET',
-    url: `https://passportapi.115.com/app/2.0/web/${g_ver}/login/sign?k_ec=${token}`,
-    responseType: 'arraybuffer',
-    anonymous: true,
-    onerror: function(response) {
-      return GM_log(`response.status = ${response.status}, response.statusText = ${response.statusText}`);
-    },
-    onload: function(response) {
-      var body, data, error, json, sig;
-      if (response.status === 200) {
-        data = Buffer.from(response.response);
-        data = ec115_decode(data, key);
-        if (data != null) {
-          json = JSON.parse(data.toString('latin1'));
-          if (json.state) {
-            body = Buffer.from(json.sign, 'base64');
-            try {
-              sig = sig_init(body);
-              return LoginEncrypt_(JSON.parse(n), g, {pub, key}, sig);
-            } catch (error1) {
-              error = error1;
-              return GM_log(`${error.message}\n${error.stack}`);
-            }
-          } else {
-            return GM_log(JSON.stringify(json));
-          }
-        } else {
-          return GM_log('data is null');
-        }
-      } else {
-        return GM_log(`response.status = ${response.status}`);
-      }
+CreateDownloadTask = function(o) {
+  var cb, f, j, len, n, ref, results, rs;
+  rs = [];
+  n = 0;
+  cb = function(r) {
+    var con, f, j, len, win, x;
+    for (x in r) {
+      rs.push(r[x]);
+      break;
     }
-  });
+    if (rs.length === n) {
+      GM_log(rs);
+      con = $('<ul/>');
+      for (j = 0, len = rs.length; j < len; j++) {
+        f = rs[j];
+        con.append(`<li><a href='${f.url.url}'>${f.file_name}</a></li>`);
+      }
+      win = new Core.DialogBase({
+        title: '文件下载',
+        content: con,
+        width: 530
+      });
+      return win.Open(null);
+    }
+  };
+  ref = o.list;
+  results = [];
+  for (j = 0, len = ref.length; j < len; j++) {
+    f = ref[j];
+    if (!f.is_dir) {
+      n++;
+      results.push(CreateDownloadTask_(f, cb));
+    } else {
+      results.push(void 0);
+    }
+  }
+  return results;
 };
 
 browserInterface = (ref = unsafeWindow.browserInterface) != null ? ref : {};
 
-browserInterface.LoginEncrypt = function(n, g) {
+browserInterface.CreateDownloadTask = function(s) {
   var error;
   try {
-    return preLoginEncrypt(n, g);
+    return CreateDownloadTask(JSON.parse(decodeURIComponent(s)));
   } catch (error1) {
     error = error1;
     return GM_log(`${error.message}\n${error.stack}`);
   }
-};
-
-browserInterface.GetBrowserVersion = function() {
-  return new String(g_ver);
-};
-
-browserInterface.ChromeGetIncognitoState = function() {
-  return false;
 };
 
 if (typeof cloneInto !== 'function') {
@@ -408,168 +246,6 @@ if (typeof cloneInto !== 'function') {
 
 unsafeWindow.browserInterface = cloneInto(browserInterface, unsafeWindow, {
   cloneFunctions: true
-});
-
-unsafeWindow.document.addEventListener('DOMContentLoaded', function() {
-  var cont, error, fakeSizeLimitGetter, fastSig, fastUpload, finput, getUserKey, js_top_panel_box, procLabel, uploadinfo;
-  try {
-    js_top_panel_box = unsafeWindow.document.getElementById('js_top_panel_box');
-    if (js_top_panel_box != null) {
-      cont = document.createElement('div');
-      finput = document.createElement('input');
-      finput.setAttribute('type', 'file');
-      procLabel = document.createElement('span');
-      cont.appendChild(finput);
-      cont.appendChild(procLabel);
-      js_top_panel_box.appendChild(cont);
-      cont.style.position = 'absolute';
-      cont.style.top = '20px';
-      cont.style.left = '320px';
-      fastSig = function(userid, fileid, target, userkey) {
-        var sha1, tmp;
-        sha1 = new jsSHA('SHA-1', 'TEXT');
-        sha1.update(`${userid}${fileid}${target}0`);
-        tmp = sha1.getHash('HEX');
-        sha1 = new jsSHA('SHA-1', 'TEXT');
-        sha1.update(`${userkey}${tmp}000000`);
-        return sha1.getHash('HEX', {
-          outputUpper: true
-        });
-      };
-      uploadinfo = null;
-      fastUpload = function({fileid, preid, filename, filesize}) {
-        var tm, tmus;
-        tmus = (new Date()).getTime();
-        tm = Math.floor(tmus / 1000);
-        return GM_xmlhttpRequest({
-          method: 'POST',
-          url: uploadinfo.url_upload + '?' + dictToQuery({
-            appid: 0,
-            appfrom: 10,
-            appversion: '2.0.0.0',
-            format: 'json',
-            isp: 0,
-            sig: fastSig(uploadinfo.user_id, fileid, 'U_1_0', uploadinfo.userkey),
-            t: tm
-          }),
-          data: dictToForm({
-            api_version: '2.0.0.0',
-            fileid: fileid,
-            filename: filename,
-            filesize: filesize,
-            preid: preid,
-            target: 'U_1_0',
-            userid: uploadinfo.user_id
-          }),
-          responseType: 'json',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
-          },
-          onload: function(response) {
-            if (response.status === 200) {
-              if (response.response.status === 2) {
-                return alert('fastupload OK, refresh window and goto root folder to find it');
-              } else {
-                return alert('fastupload FAIL, LOL');
-              }
-            } else {
-              return GM_log(`response.status = ${response.status}`);
-            }
-          }
-        });
-      };
-      getUserKey = function(param) {
-        return GM_xmlhttpRequest({
-          method: 'GET',
-          url: 'http://proapi.115.com/app/uploadinfo',
-          responseType: 'json',
-          onload: function(response) {
-            if (response.status === 200) {
-              uploadinfo = response.response;
-              return fastUpload(param);
-            } else {
-              return GM_log(`response.status = ${response.status}`);
-            }
-          }
-        });
-      };
-      finput.onchange = function(e) {
-        var PSIZE, allSha1, f, finalPart, nextPart, npart, preid;
-        if (e.target.files.length === 0) {
-          return;
-        }
-        f = e.target.files[0];
-        if (f.size < 128 * 1024) {
-          alert('file size less than 128K');
-          return;
-        }
-        PSIZE = 1 * 1024 * 1024;
-        npart = Math.floor((f.size + PSIZE - 1) / PSIZE);
-        allSha1 = new jsSHA('SHA-1', 'ARRAYBUFFER');
-        preid = '';
-        finalPart = function() {
-          var fileid, param;
-          fileid = allSha1.getHash('HEX', {
-            outputUpper: true
-          });
-          param = {
-            fileid,
-            preid,
-            filename: f.name,
-            filesize: f.size
-          };
-          if (uploadinfo != null) {
-            return fastUpload(param);
-          } else {
-            return getUserKey(param);
-          }
-        };
-        nextPart = function(n) {
-          var b, reader;
-          reader = new FileReader();
-          b = f.slice(n * PSIZE, ((n + 1) * PSIZE > f.size ? f.size : (n + 1) * PSIZE));
-          reader.onerror = function(e) {
-            return GM_log(`${e.target.error}`);
-          };
-          reader.onload = function(e) {
-            var data, sha1;
-            data = new Uint8Array(e.target.result);
-            if (n === 0) {
-              sha1 = new jsSHA('SHA-1', 'ARRAYBUFFER');
-              sha1.update(data.slice(0, 128 * 1024));
-              preid = sha1.getHash('HEX', {
-                outputUpper: true
-              });
-            }
-            allSha1.update(data);
-            procLabel.textContent = `(${Math.floor((n + 1) * 100 / npart)}%)`;
-            if (n === npart - 1) {
-              return finalPart();
-            } else {
-              return nextPart(n + 1);
-            }
-          };
-          return reader.readAsArrayBuffer(b);
-        };
-        return nextPart(0);
-      };
-    }
-    if (unsafeWindow.UPLOAD_CONFIG_H5 != null) {
-      fakeSizeLimitGetter = function() {
-        return 115 * 1024 * 1024 * 1024;
-      };
-      if (Object.defineProperty != null) {
-        return Object.defineProperty(unsafeWindow.UPLOAD_CONFIG_H5, 'size_limit', {
-          get: fakeSizeLimitGetter
-        });
-      } else if (Object.prototype.__defineGetter__ != null) {
-        return unsafeWindow.UPLOAD_CONFIG_H5.__defineGetter__('size_limit', fakeSizeLimitGetter);
-      }
-    }
-  } catch (error1) {
-    error = error1;
-    return GM_log(`${error.message}\n${error.stack}`);
-  }
 });
 
 })();
